@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Account Database — X Location Filter</title>
+  <link rel="stylesheet" href="db.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="" width="24" height="24">
+    <h1>Account database</h1>
+    <span id="count" class="muted"></span>
+    <button id="refresh" class="secondary">Refresh</button>
+  </header>
+
+  <div class="toolbar">
+    <input id="search" type="search" placeholder="Search handle, location or comment…" autocomplete="off">
+    <select id="filter">
+      <option value="all">All accounts</option>
+      <option value="shown">Shown by filter</option>
+      <option value="hidden">Hidden by filter</option>
+      <option value="waiting">Waiting for lookup</option>
+      <option value="unknown">No location</option>
+      <option value="manual">Edited by hand</option>
+      <option value="comment">Has comment</option>
+    </select>
+  </div>
+
+  <form id="addForm" class="toolbar add">
+    <input id="addHandle" type="text" placeholder="@handle" autocomplete="off" required>
+    <input id="addLocation" type="text" placeholder="Location" autocomplete="off">
+    <input id="addComment" type="text" placeholder="Comment" autocomplete="off">
+    <button type="submit">Add account</button>
+    <span id="addMsg" class="muted"></span>
+  </form>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="handle">Handle</th>
+          <th data-sort="location">Location</th>
+          <th data-sort="status">Filter</th>
+          <th data-sort="comment">Comment</th>
+          <th data-sort="checkedAt">Checked</th>
+          <th data-sort="firstSeen">First seen</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+
+  <footer class="pager">
+    <button id="prev" class="secondary">← Prev</button>
+    <span id="pageInfo" class="muted"></span>
+    <button id="next" class="secondary">Next →</button>
+  </footer>
+
+  <p class="hint muted">Edits save when you leave the field. A location you edit here is marked
+    "edited" and is never overwritten by lookups. Clear the location to mark an account as having none.
+    Accounts added without a location wait for a lookup; ↻ queues an account to be looked up again.</p>
+
+  <script src="db.js"></script>
+</body>
+</html>

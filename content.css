@@ -1,0 +1,26 @@
+/* Filtered out: collapse the timeline cell's content (the cell node itself stays
+   so X's virtualized list keeps working). */
+[data-xlf="hide"] > * {
+  display: none !important;
+}
+
+/* Location not known yet: keep the space but blur the post until it's checked. */
+[data-xlf="pending"] > * {
+  filter: blur(8px);
+  opacity: 0.35;
+  pointer-events: none;
+  user-select: none;
+}
+
+.xlf-label {
+  display: inline-block;
+  margin: 2px 0 0 0;
+  padding: 0 6px;
+  border-radius: 9999px;
+  font-size: 12px;
+  line-height: 18px;
+  color: rgb(113, 118, 123);
+  border: 1px solid rgba(113, 118, 123, 0.35);
+  white-space: nowrap;
+  font-family: inherit;
+}

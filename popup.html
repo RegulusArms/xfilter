@@ -1,0 +1,62 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header>
+    <img src="icons/icon32.png" alt="" width="20" height="20">
+    <h1>X Location Filter</h1>
+    <label class="switch" title="Turn filter on/off">
+      <input type="checkbox" id="enabled">
+      <span class="slider"></span>
+    </label>
+  </header>
+
+  <p id="status" class="status"></p>
+
+  <section>
+    <h2>Allowed locations</h2>
+    <form id="addForm">
+      <input id="newLoc" type="text" placeholder="e.g. United States" autocomplete="off">
+      <button type="submit">Add</button>
+    </form>
+    <ul id="list"></ul>
+    <p class="hint">A post is shown if the author's "Account based in" contains any entry (case-insensitive). Empty list = nothing is filtered.</p>
+  </section>
+
+  <section>
+    <h2>Options</h2>
+    <label class="opt"><input type="checkbox" id="hideUnknown"> Hide accounts with no location</label>
+    <label class="opt"><input type="checkbox" id="blurPending"> Blur posts while checking</label>
+    <label class="opt"><input type="checkbox" id="showLabels"> Show location label on posts</label>
+  </section>
+
+  <section>
+    <h2>This tab</h2>
+    <p id="stats" class="stats">Open x.com to see stats.</p>
+  </section>
+
+  <section>
+    <h2>Account database</h2>
+    <p id="dbCount" class="stats">…</p>
+    <div class="row">
+      <button id="openDb">Open</button>
+      <button id="exportDb" class="secondary">Export</button>
+      <button id="importDb" class="secondary">Import</button>
+      <button id="clearDb" class="secondary danger">Clear</button>
+      <input id="importFile" type="file" accept=".json,application/json" hidden>
+    </div>
+  </section>
+
+  <details>
+    <summary>Advanced</summary>
+    <label class="field">AboutAccountQuery ID override
+      <input id="queryId" type="text" placeholder="auto-detect" autocomplete="off">
+    </label>
+  </details>
+
+  <script src="popup.js"></script>
+</body>
+</html>
