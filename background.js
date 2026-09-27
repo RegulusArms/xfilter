@@ -414,6 +414,107 @@ async function pushToCloud() {
   return result;
 }
 
+// ---------- seen-post history ----------
+// Separate IndexedDB database of posts the user actually had on screen, newest first,
+// capped at the historyLimit setting. Record: { id, handle, name, text, url, image,
+// location, seenAt (ms) }. id is the status id (or a synthetic one for posts without a
+// status link, e.g. ads).
+
+const HISTORY_DB = 'xlf-history';
+const HISTORY_STORE = 'posts';
+const HISTORY_DEFAULT_LIMIT = 100;
+const HISTORY_MAX_LIMIT = 10000;
+
+let historyDbPromise = null;
+function openHistoryDb() {
+  if (historyDbPromise) return historyDbPromise;
+  historyDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(HISTORY_DB, 1);
+    req.onupgradeneeded = () => {
+      const store = req.result.createObjectStore(HISTORY_STORE, { keyPath: 'id' });
+      store.createIndex('seenAt', 'seenAt');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => {
+      historyDbPromise = null;
+      reject(req.error);
+    };
+  });
+  return historyDbPromise;
+}
+
+async function withHistory(mode, fn) {
+  const db = await openHistoryDb();
+  const tx = db.transaction(HISTORY_STORE, mode);
+  const result = await fn(tx.objectStore(HISTORY_STORE));
+  await txDone(tx);
+  return result;
+}
+
+async function historyLimit() {
+  const { historyLimit: n } = await chrome.storage.sync.get({ historyLimit: HISTORY_DEFAULT_LIMIT });
+  return Math.min(HISTORY_MAX_LIMIT, Math.max(1, Math.floor(Number(n)) || HISTORY_DEFAULT_LIMIT));
+}
+
+const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+
+// Add (or bump to the top) posts seen on screen, then drop the oldest over the limit.
+async function addHistory(posts) {
+  const limit = await historyLimit();
+  const now = Date.now();
+  await withHistory('readwrite', async (store) => {
+    for (const p of posts) {
+      const id = str(p && p.id, 100);
+      if (!id) continue;
+      store.put({
+        id,
+        handle: validHandle(p.handle) || '',
+        name: str(p.name, 100),
+        text: str(p.text, 1000),
+        url: /^https:\/\/x\.com\//.test(p.url) ? p.url : '',
+        image: /^https:\/\/[a-z0-9.-]+\.twimg\.com\//.test(p.image) ? p.image : '',
+        location: cleanLocation(p.location),
+        seenAt: now,
+      });
+    }
+    let excess = (await reqToPromise(store.count())) - limit;
+    if (excess <= 0) return;
+    await new Promise((resolve, reject) => {
+      const req = store.index('seenAt').openCursor(); // oldest first
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur || excess-- <= 0) return resolve();
+        cur.delete();
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+// Newest first, at most historyLimit entries.
+async function listHistory() {
+  const limit = await historyLimit();
+  return withHistory('readonly', (store) => {
+    const out = [];
+    return new Promise((resolve, reject) => {
+      const req = store.index('seenAt').openCursor(null, 'prev');
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur || out.length >= limit) return resolve(out);
+        out.push(cur.value);
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function clearHistory() {
+  await withHistory('readwrite', (store) => reqToPromise(store.clear()));
+  await chrome.storage.local.set({ historyClearedAt: Date.now() });
+}
+
 // Download the merged account list and import it (gaps only, like a file import).
 // Accepts a bare array or an ingest-style { accounts: [...] } body.
 async function pullFromCloud() {
@@ -464,6 +565,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     'queue-release': () => Promise.resolve(release(msg.handle)),
     'cloud-push': () => pushToCloud(),
     'cloud-pull': () => pullFromCloud(),
+    'history-add': () => addHistory(msg.posts || []).then(() => true),
+    'history-list': () => listHistory(),
+    'history-clear': () => clearHistory().then(() => true),
     'queue-stats': () => pendingCount().then((pending) => ({ pending, working: leases.size })),
   };
   const fn = msg && handlers[msg.type];

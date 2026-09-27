@@ -56,6 +56,7 @@ Click the toolbar icon to open the popup.
 | **Show location label on posts** | Adds a small 📍 label with the location to posts that are shown. |
 | **This tab** | Live counts for the current x.com tab: hidden, shown, being checked, lookups running now, lookups made this page. Also shows whether the login token was captured and the last error. |
 | **Account database** | Number of saved accounts and how many are waiting for a lookup, plus **Open**, **Export**, **Import** and **Clear**. |
+| **History tab** | The posts you've recently had on screen, newest first. See [Post history](#post-history). |
 | **Advanced → AboutAccountQuery ID override** | Manual override for X's lookup request ID. See [Finding the query ID](#finding-the-query-id-for-the-override). |
 
 Because matching is by "contains", a short entry like `United` matches both United States and United Kingdom.
@@ -157,6 +158,20 @@ The button then shows how many accounts were added and how many were filled in. 
 
 ---
 
+## Post history
+
+The **History** tab in the popup lists the posts you've recently had on screen, newest first, so you can find a post again after X refreshes your timeline.
+
+- A post counts as seen once at least half of it has been on screen for about half a second. Posts the filter hid are never recorded; blurred ones waiting for a lookup are.
+- Each entry shows the author, when you saw it, the post text, the first image and the author's location if known. Click an entry to open the post on x.com.
+- Seeing a post again moves it back to the top.
+- **Keep last** sets how many posts are kept: 100 by default, up to 10,000. Older ones are dropped.
+- **Clear** deletes the whole history. The account database is not affected.
+
+History is kept in its own IndexedDB database (`xlf-history`), separate from the account database, and never leaves your browser.
+
+---
+
 ## Finding the query ID (for the override)
 
 X gives each internal request an ID that changes from time to time. The extension finds the current one automatically in three ways:
@@ -206,7 +221,7 @@ Errors are also logged in the x.com tab's DevTools console, prefixed with `[X Lo
 | `manifest.json` | Extension manifest (Manifest V3). |
 | `content.js` / `content.css` | Runs on x.com: finds posts, hides or blurs them, runs lookups. |
 | `page-hook.js` | Runs inside the x.com page to read X's login token and query ID from its own requests (read-only). |
-| `background.js` | Account database (IndexedDB) and the shared lookup queue. |
+| `background.js` | Account database and post history (IndexedDB), and the shared lookup queue. |
 | `popup.html` / `popup.js` / `popup.css` | Toolbar popup. |
 | `db.html` / `db.js` / `db.css` | Account database viewer and editor. |
 | `icons/` | Extension icons. |

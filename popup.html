@@ -14,6 +14,12 @@
     </label>
   </header>
 
+  <nav class="tabs">
+    <button class="tab" data-tab="filter">Filter</button>
+    <button class="tab" data-tab="history">History</button>
+  </nav>
+
+  <div id="panel-filter" class="panel">
   <p id="status" class="status"></p>
 
   <section>
@@ -67,6 +73,17 @@
       <input id="ingestUrl" type="password" placeholder="uses config.js" autocomplete="off">
     </label>
   </details>
+  </div>
+
+  <div id="panel-history" class="panel" hidden>
+    <div class="row hist-bar">
+      <label class="hist-limit">Keep last
+        <input id="historyLimit" type="number" min="10" max="10000" step="10">
+      </label>
+      <button id="clearHistory" class="secondary danger">Clear</button>
+    </div>
+    <ol id="history" class="history"></ol>
+  </div>
 
   <script src="popup.js"></script>
 </body>

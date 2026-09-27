@@ -231,6 +231,124 @@ async function refreshStats() {
   }
 }
 
+// ---------- tabs ----------
+
+function showTab(name) {
+  document.querySelectorAll('.tab').forEach((t) => t.classList.toggle('active', t.dataset.tab === name));
+  document.querySelectorAll('.panel').forEach((p) => (p.hidden = p.id !== 'panel-' + name));
+  try {
+    localStorage.setItem('xlf-tab', name);
+  } catch {
+    /* storage unavailable: just don't remember the tab */
+  }
+  if (name === 'history') refreshHistory(true);
+}
+
+document.querySelectorAll('.tab').forEach((t) => t.addEventListener('click', () => showTab(t.dataset.tab)));
+
+// ---------- history ----------
+
+const HISTORY_DEFAULT_LIMIT = 100; // keep in sync with background.js
+const HISTORY_MAX_LIMIT = 10000;
+let historyKey = '';
+
+chrome.storage.sync
+  .get({ historyLimit: HISTORY_DEFAULT_LIMIT })
+  .then(({ historyLimit }) => ($('historyLimit').value = historyLimit));
+
+$('historyLimit').addEventListener('change', async (e) => {
+  const n = Math.min(HISTORY_MAX_LIMIT, Math.max(10, Math.floor(Number(e.target.value)) || HISTORY_DEFAULT_LIMIT));
+  e.target.value = n;
+  await chrome.storage.sync.set({ historyLimit: n });
+  refreshHistory(true);
+});
+
+$('clearHistory').addEventListener('click', async () => {
+  if (!confirm('Clear the list of posts you have seen?')) return;
+  await db({ type: 'history-clear' });
+  refreshHistory(true);
+});
+
+function timeAgo(ms) {
+  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
+  if (s < 60) return `${s}s`;
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
+function renderPost(p) {
+  const li = document.createElement('li');
+  li.title = new Date(p.seenAt).toLocaleString();
+
+  const head = document.createElement('div');
+  head.className = 'post-head';
+  const name = document.createElement('span');
+  name.className = 'post-name';
+  name.textContent = p.name || '@' + p.handle;
+  const meta = document.createElement('span');
+  meta.className = 'post-meta';
+  meta.textContent = `@${p.handle} · seen ${timeAgo(p.seenAt)} ago`;
+  head.append(name, meta);
+
+  const text = document.createElement('div');
+  text.className = p.text ? 'post-text' : 'post-text none';
+  text.textContent = p.text || '(no text)';
+  li.append(head, text);
+
+  if (p.image) {
+    const img = document.createElement('img');
+    img.className = 'post-img';
+    img.src = p.image;
+    img.alt = '';
+    img.loading = 'lazy';
+    li.append(img);
+  }
+  if (p.location) {
+    const loc = document.createElement('div');
+    loc.className = 'post-loc';
+    loc.textContent = '📍 ' + p.location;
+    li.append(loc);
+  }
+  if (p.url) li.addEventListener('click', () => chrome.tabs.create({ url: p.url }));
+  return li;
+}
+
+// Re-renders only when the list changed (or force), so scrolling isn't disturbed.
+async function refreshHistory(force) {
+  if ($('panel-history').hidden) return;
+  let posts;
+  try {
+    posts = await db({ type: 'history-list' });
+  } catch (e) {
+    $('history').textContent = 'History error: ' + e.message;
+    return;
+  }
+  const key = posts.map((p) => p.id + ':' + p.seenAt).join(',');
+  if (!force && key === historyKey) return;
+  historyKey = key;
+  const ol = $('history');
+  const scroll = ol.scrollTop;
+  ol.textContent = '';
+  if (!posts.length) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = 'No posts yet — scroll x.com and they will show up here.';
+    ol.append(li);
+  } else {
+    posts.forEach((p) => ol.append(renderPost(p)));
+  }
+  ol.scrollTop = scroll;
+}
+
+let initialTab = 'filter';
+try {
+  initialTab = localStorage.getItem('xlf-tab') === 'history' ? 'history' : 'filter';
+} catch {
+  /* default tab */
+}
+showTab(initialTab);
+
 load();
 showLastPush();
 showLastPull();
@@ -239,4 +357,5 @@ refreshDbCount();
 setInterval(() => {
   refreshStats();
   refreshDbCount();
+  refreshHistory(false);
 }, 1000);
