@@ -4,6 +4,8 @@ A Brave (Chromium) extension that hides posts on x.com from accounts whose **"Ac
 
 It changes only what your browser shows. Nothing is posted, followed, blocked or changed on X.
 
+It also keeps a [history of the posts you've seen](#post-history), so you can find that post you were reading before your timeline refreshed.
+
 ---
 
 ## Install in Brave
