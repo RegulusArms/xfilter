@@ -137,11 +137,73 @@ $('importFile').addEventListener('change', async (e) => {
   try {
     const data = JSON.parse(await file.text());
     const records = Array.isArray(data) ? data : [];
-    await db({ type: 'db-import', records });
-    flash('importDb', `Imported ${records.length}`);
+    const s = await db({ type: 'db-import', records });
+    flash('importDb', `Added ${s.added}, filled ${s.filled}`);
     refreshDbCount();
   } catch (err) {
     flash('importDb', 'Bad file');
+  }
+});
+
+// Stored in local (not sync) storage: the URL's sig= parameter is a password.
+chrome.storage.local.get({ ingestUrl: '' }).then(({ ingestUrl }) => ($('ingestUrl').value = ingestUrl));
+$('ingestUrl').addEventListener('change', (e) =>
+  chrome.storage.local.set({ ingestUrl: e.target.value.trim() })
+);
+
+const CLOUD_COOLDOWN_MS = 24 * 3600e3; // keep in sync with background.js
+
+// Disables the button until the 24 h cooldown after the last successful run is over.
+function applyCooldown(id, last) {
+  const next = last && last.ok !== false ? last.at + CLOUD_COOLDOWN_MS : 0;
+  const waiting = Date.now() < next;
+  $(id).disabled = waiting;
+  $(id).title = waiting
+    ? 'Available again ' + new Date(next).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+    : '';
+}
+
+async function showLastPush() {
+  const { lastPush } = await chrome.storage.local.get('lastPush');
+  applyCooldown('pushDb', lastPush);
+  if (!lastPush) return;
+  const when = new Date(lastPush.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  $('pushStatus').textContent = lastPush.ok
+    ? `Last push ${when}: ${lastPush.count.toLocaleString()} accounts`
+    : `Last push ${when} failed (HTTP ${lastPush.status})`;
+}
+
+$('pushDb').addEventListener('click', async () => {
+  $('pushDb').disabled = true;
+  $('pushStatus').textContent = 'Pushing…';
+  try {
+    await db({ type: 'cloud-push' });
+    await showLastPush();
+  } catch (e) {
+    $('pushStatus').textContent = 'Push failed: ' + e.message;
+    applyCooldown('pushDb', (await chrome.storage.local.get('lastPush')).lastPush);
+  }
+});
+
+async function showLastPull() {
+  const { lastPull } = await chrome.storage.local.get('lastPull');
+  applyCooldown('pullDb', lastPull);
+  if (!lastPull) return;
+  const when = new Date(lastPull.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  $('pullStatus').textContent =
+    `Last pull ${when}: ${lastPull.added.toLocaleString()} new, ${lastPull.filled.toLocaleString()} filled`;
+}
+
+$('pullDb').addEventListener('click', async () => {
+  $('pullDb').disabled = true;
+  $('pullStatus').textContent = 'Pulling…';
+  try {
+    await db({ type: 'cloud-pull' });
+    await showLastPull();
+    refreshDbCount();
+  } catch (e) {
+    $('pullStatus').textContent = 'Pull failed: ' + e.message;
+    applyCooldown('pullDb', (await chrome.storage.local.get('lastPull')).lastPull);
   }
 });
 
@@ -170,6 +232,8 @@ async function refreshStats() {
 }
 
 load();
+showLastPush();
+showLastPull();
 refreshStats();
 refreshDbCount();
 setInterval(() => {

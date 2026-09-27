@@ -140,7 +140,12 @@ The file is a JSON array with one object per account:
 1. Click **Import** in the popup. It opens in a regular tab, because a file picker would close the popup.
 2. Click **Import** again and pick a previously exported `.json` file.
 
-Imported rows are merged into the existing database. Rows for the same handle are replaced, except that a location you set by hand is only replaced by another hand-set one.
+Importing only adds what's missing; nothing already in the database is overwritten:
+- Handles that aren't in the database are added.
+- An existing account with no location yet (waiting for a lookup, or looked up with none found) takes the imported location, unless you set it by hand.
+- An empty comment is filled in from the imported row.
+
+The button then shows how many accounts were added and how many were filled in. Times can be milliseconds (this extension's export) or ISO 8601 strings.
 
 ### Viewing the raw database
 1. Open `brave://extensions`.
@@ -211,5 +216,5 @@ Errors are also logged in the x.com tab's DevTools console, prefixed with `[X Lo
 ## Notes
 
 - This relies on X's **internal, undocumented** web API, which can change or break at any time.
-- All data stays in your browser. The extension sends nothing anywhere except X's own lookup requests, made as you.
+- All data stays in your browser. The extension makes no requests on its own except X's own lookup requests, made as you.
 - Collecting and storing other accounts' profile data may conflict with X's Terms of Service. Use at your own discretion.
