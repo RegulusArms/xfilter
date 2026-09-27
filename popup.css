@@ -36,6 +36,7 @@ section { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10
 
 .status { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 .status.off { color: var(--danger); }
+.status.learning { color: var(--accent); }
 
 form { display: flex; gap: 6px; }
 input[type="text"] {

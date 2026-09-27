@@ -4,6 +4,7 @@ const DEFAULTS = {
   blurPending: true,
   hideUnknown: true,
   showLabels: true,
+  learningMode: false,
   queryId: '',
 };
 
@@ -16,6 +17,7 @@ async function load() {
   $('hideUnknown').checked = settings.hideUnknown;
   $('blurPending').checked = settings.blurPending;
   $('showLabels').checked = settings.showLabels;
+  $('learningMode').checked = settings.learningMode;
   $('queryId').value = settings.queryId;
   renderList();
   renderStatus();
@@ -32,6 +34,9 @@ function renderStatus() {
   if (!settings.enabled) {
     el.textContent = 'Filter is OFF — all posts are shown.';
     el.className = 'status off';
+  } else if (settings.learningMode) {
+    el.textContent = 'Learning mode — all posts are shown; 1 location lookup every 30 s.';
+    el.className = 'status learning';
   } else if (!settings.allowed.length) {
     el.textContent = 'Filter is on, but no locations are allowed yet — add one below.';
     el.className = 'status';
@@ -80,7 +85,7 @@ $('addForm').addEventListener('submit', (e) => {
   $('newLoc').focus();
 });
 
-for (const id of ['enabled', 'hideUnknown', 'blurPending', 'showLabels']) {
+for (const id of ['enabled', 'hideUnknown', 'blurPending', 'showLabels', 'learningMode']) {
   $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
 }
 

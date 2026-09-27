@@ -24,6 +24,7 @@
     blurPending: true,
     hideUnknown: true,
     showLabels: true,
+    learningMode: false,
     queryId: '',
   };
 
@@ -170,7 +171,10 @@
   function visiblePending() {
     const margin = window.innerHeight;
     const out = [];
-    document.querySelectorAll('[data-xlf="pending"][data-xlf-handle]').forEach((cell) => {
+    // By cache state, not data-xlf: in learning mode waiting posts aren't marked pending.
+    document.querySelectorAll('[data-xlf-handle]').forEach((cell) => {
+      const e = cache[cell.dataset.xlfHandle];
+      if (!e || !e.pending || e.loc) return;
       const r = cell.getBoundingClientRect();
       if (r.bottom > -margin && r.top < window.innerHeight + margin) out.push(cell.dataset.xlfHandle);
     });
@@ -207,9 +211,20 @@
     });
   }
 
-  // Returns 'show' | 'hide' | 'pending'
+  // Returns 'show' | 'hide' | 'pending'. Learning mode shows everything but still
+  // queues accounts for lookup (the background worker slows the lookups down).
   function decide(handle) {
-    if (!settings.enabled || !settings.allowed.length) return 'show';
+    if (!settings.enabled) return 'show';
+    if (settings.learningMode) {
+      filterState(handle);
+      return 'show';
+    }
+    if (!settings.allowed.length) return 'show';
+    return filterState(handle);
+  }
+
+  // The filter's verdict; also loads the account from the DB / queues it as needed.
+  function filterState(handle) {
     const e = cache[handle];
     if (!e) {
       checkDb(handle);
@@ -259,7 +274,7 @@
   }
 
   function rescanAll() {
-    if (!settings.enabled || !settings.allowed.length) {
+    if (!settings.enabled || settings.learningMode || !settings.allowed.length) {
       document.querySelectorAll('[data-xlf]').forEach((el) => (el.dataset.xlf = 'show'));
     }
     scan();
@@ -408,6 +423,7 @@
           pausedUntil = Math.max(pausedUntil, claim.pausedUntil);
           continue;
         }
+        if (claim.nextAt) return pumpLater(claim.nextAt - Date.now() + 250); // learning-mode pace
         if (!claim.handle) return pumpLater(IDLE_POLL_MS);
         active++;
         run(claim.handle);

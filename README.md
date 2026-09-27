@@ -56,6 +56,7 @@ Click the toolbar icon to open the popup.
 | **Hide accounts with no location** | Hide authors X shows no location for. |
 | **Blur posts while checking** | Blur posts until their author's location is known, instead of showing them. |
 | **Show location label on posts** | Adds a small 📍 label with the location to posts that are shown. |
+| **Learning mode** | Shows every post (the filter is bypassed) and slows location lookups to one every 30 seconds. See [Learning mode](#learning-mode). |
 | **This tab** | Live counts for the current x.com tab: hidden, shown, being checked, lookups running now, lookups made this page. Also shows whether the login token was captured and the last error. |
 | **Account database** | Number of saved accounts and how many are waiting for a lookup, plus **Open**, **Export**, **Import** and **Clear**. |
 | **History tab** | The posts you've recently had on screen, newest first. See [Post history](#post-history). |
@@ -97,6 +98,16 @@ X allows only a limited number of these lookups per 15-minute window.
 
 ### 5. Hiding
 Hidden posts are collapsed in your browser only. Turning the filter off or changing the allow list brings them back instantly.
+
+### Learning mode
+Tick **Learning mode** in the popup's Options to build up the account database slowly in the background while you browse normally.
+
+- **Nothing is filtered:** every post is shown and nothing is blurred, whatever your allow list says. Location labels still appear if **Show location label on posts** is on.
+- **Lookups keep running, but slowly:** at most **one location lookup every 30 seconds**, counted across all x.com tabs together. Accounts you scroll past are still added to the waiting list, and ones currently on screen are looked up first.
+- The popup status line shows when learning mode is on, and the database page's status column shows **off** for every account that isn't waiting for a lookup.
+- Untick it to go back to normal: filtering resumes immediately and lookups run at full speed again.
+
+The master on/off switch still wins: with the filter switched off, no lookups run in either mode.
 
 ---
 
