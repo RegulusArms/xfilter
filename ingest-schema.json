@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "type": "integer" },
+    "clientId": { "type": "string" },
+    "extensionVersion": { "type": "string" },
+    "sentAt": { "type": "string" },
+    "accountCount": { "type": "integer" },
+    "accounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "handle": { "type": "string" },
+          "location": { "type": "string" },
+          "checkedAt": { "type": "string" },
+          "firstSeen": { "type": ["string", "null"] },
+          "manual": { "type": "boolean" },
+          "comment": { "type": "string" }
+        },
+        "required": ["handle", "location", "checkedAt", "manual"]
+      }
+    }
+  },
+  "required": ["schemaVersion", "clientId", "sentAt", "accountCount", "accounts"]
+}

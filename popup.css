@@ -97,4 +97,10 @@ summary { cursor: pointer; }
 .switch input:checked + .slider::before { transform: translateX(16px); }
 
 .row { display: flex; gap: 6px; }
+.row.push { align-items: center; margin-top: 8px; }
+#pushStatus, #pullStatus { font-size: 11px; }
+input[type="password"] {
+  width: 100%; padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--chip); color: var(--fg); font: inherit;
+}
 button.danger { color: var(--danger); }

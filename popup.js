@@ -137,11 +137,61 @@ $('importFile').addEventListener('change', async (e) => {
   try {
     const data = JSON.parse(await file.text());
     const records = Array.isArray(data) ? data : [];
-    await db({ type: 'db-import', records });
-    flash('importDb', `Imported ${records.length}`);
+    const s = await db({ type: 'db-import', records });
+    flash('importDb', `Added ${s.added}, filled ${s.filled}`);
     refreshDbCount();
   } catch (err) {
     flash('importDb', 'Bad file');
+  }
+});
+
+// Stored in local (not sync) storage: the URL's sig= parameter is a password.
+chrome.storage.local.get({ ingestUrl: '' }).then(({ ingestUrl }) => ($('ingestUrl').value = ingestUrl));
+$('ingestUrl').addEventListener('change', (e) =>
+  chrome.storage.local.set({ ingestUrl: e.target.value.trim() })
+);
+
+async function showLastPush() {
+  const { lastPush } = await chrome.storage.local.get('lastPush');
+  if (!lastPush) return;
+  const when = new Date(lastPush.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  $('pushStatus').textContent = lastPush.ok
+    ? `Last push ${when}: ${lastPush.count.toLocaleString()} accounts`
+    : `Last push ${when} failed (HTTP ${lastPush.status})`;
+}
+
+$('pushDb').addEventListener('click', async () => {
+  $('pushDb').disabled = true;
+  $('pushStatus').textContent = 'Pushing…';
+  try {
+    await db({ type: 'cloud-push' });
+    await showLastPush();
+  } catch (e) {
+    $('pushStatus').textContent = 'Push failed: ' + e.message;
+  } finally {
+    $('pushDb').disabled = false;
+  }
+});
+
+async function showLastPull() {
+  const { lastPull } = await chrome.storage.local.get('lastPull');
+  if (!lastPull) return;
+  const when = new Date(lastPull.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+  $('pullStatus').textContent =
+    `Last pull ${when}: ${lastPull.added.toLocaleString()} new, ${lastPull.filled.toLocaleString()} filled`;
+}
+
+$('pullDb').addEventListener('click', async () => {
+  $('pullDb').disabled = true;
+  $('pullStatus').textContent = 'Pulling…';
+  try {
+    await db({ type: 'cloud-pull' });
+    await showLastPull();
+    refreshDbCount();
+  } catch (e) {
+    $('pullStatus').textContent = 'Pull failed: ' + e.message;
+  } finally {
+    $('pullDb').disabled = false;
   }
 });
 
@@ -170,6 +220,8 @@ async function refreshStats() {
 }
 
 load();
+showLastPush();
+showLastPull();
 refreshStats();
 refreshDbCount();
 setInterval(() => {

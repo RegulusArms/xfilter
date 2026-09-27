@@ -1,10 +1,10 @@
 {
   "manifest_version": 3,
   "name": "X Location Filter",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Hides posts on x.com from accounts whose 'Account based in' location isn't on your allow list. Display-only; changes nothing on X.",
   "permissions": ["storage"],
-  "host_permissions": ["https://x.com/*", "https://abs.twimg.com/*"],
+  "host_permissions": ["https://x.com/*", "https://abs.twimg.com/*", "https://*.logic.azure.com/*", "https://merged.regulusarms.com/*", "https://logicappssquidplaster.blob.core.windows.net/*"],
   "background": {
     "service_worker": "background.js"
   },
