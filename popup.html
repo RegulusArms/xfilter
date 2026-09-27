@@ -14,6 +14,12 @@
     </label>
   </header>
 
+  <nav class="tabs">
+    <button class="tab" data-tab="filter">Filter</button>
+    <button class="tab" data-tab="history">History</button>
+  </nav>
+
+  <div id="panel-filter" class="panel">
   <p id="status" class="status"></p>
 
   <section>
@@ -31,6 +37,8 @@
     <label class="opt"><input type="checkbox" id="hideUnknown"> Hide accounts with no location</label>
     <label class="opt"><input type="checkbox" id="blurPending"> Blur posts while checking</label>
     <label class="opt"><input type="checkbox" id="showLabels"> Show location label on posts</label>
+    <label class="opt" title="Filters as usual but looks up only one account every 10 seconds"><input type="checkbox" id="slowMode"> Slow mode (1 lookup every 10 s)</label>
+    <label class="opt" title="Shows every post and looks up one account every 10 seconds"><input type="checkbox" id="learningMode"> Learning mode (no filtering, slow lookups)</label>
   </section>
 
   <section>
@@ -67,6 +75,17 @@
       <input id="ingestUrl" type="password" placeholder="uses config.js" autocomplete="off">
     </label>
   </details>
+  </div>
+
+  <div id="panel-history" class="panel" hidden>
+    <div class="row hist-bar">
+      <label class="hist-limit">Keep last
+        <input id="historyLimit" type="number" min="10" max="10000" step="10">
+      </label>
+      <button id="clearHistory" class="secondary danger">Clear</button>
+    </div>
+    <ol id="history" class="history"></ol>
+  </div>
 
   <script src="popup.js"></script>
 </body>

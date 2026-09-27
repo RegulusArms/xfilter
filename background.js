@@ -23,6 +23,11 @@ const STORE = 'accounts';
 const TTL_NONE = 7 * 24 * 3600e3; // re-check "no location" accounts after this long
 const LEASE_MS = 60e3; // a claimed account is reserved for one tab this long
 const PRIORITY_MS = 30e3; // "on screen" hints expire after this long
+// Lookup pace: at most one lookup started this often, across all tabs. Learning wins if
+// both it and slow mode are on; otherwise the normal pace applies.
+const NORMAL_INTERVAL_MS = 1e3;
+const LEARNING_INTERVAL_MS = 10e3;
+const SLOW_INTERVAL_MS = 10e3;
 const MERGED_URL = 'https://merged.regulusarms.com/merged.json'; // "Pull from cloud" source
 const CLOUD_COOLDOWN_MS = 24 * 3600e3; // at most one successful push and one pull per day
 
@@ -127,6 +132,7 @@ function pendingCount() {
 
 const leases = new Map(); // handle -> lease expiry
 const priority = new Map(); // handle -> last time a tab reported it on screen
+let lastClaimAt = 0; // for the lookup pace
 
 // Content script saw these accounts on the page. New ones become pending; "no location"
 // ones older than TTL_NONE are queued for a re-check. `visible` ones jump the line.
@@ -162,10 +168,21 @@ function setPriority(handles) {
 // Hand the next account to look up to a tab: on-screen accounts first (most recently
 // reported), then the oldest pending one. Returns { handle } or { handle: null }.
 async function claim() {
-  const { pausedUntil = 0 } = await chrome.storage.local.get('pausedUntil');
+  const [{ pausedUntil = 0 }, { learningMode, slowMode }] = await Promise.all([
+    chrome.storage.local.get('pausedUntil'),
+    // Defaults must match popup.js / content.js: learning mode is on for a fresh install.
+    chrome.storage.sync.get({ learningMode: true, slowMode: false }),
+  ]);
   if (pausedUntil > Date.now()) return { handle: null, pausedUntil };
 
   const now = Date.now();
+  // One lookup per interval. The slot is reserved before the DB read so concurrent
+  // claims from several tabs can't both get through.
+  const interval = learningMode ? LEARNING_INTERVAL_MS : slowMode ? SLOW_INTERVAL_MS : NORMAL_INTERVAL_MS;
+  const prevClaimAt = lastClaimAt;
+  const nextAt = lastClaimAt + interval;
+  if (now < nextAt) return { handle: null, nextAt };
+  lastClaimAt = now;
   for (const [h, exp] of leases) if (exp < now) leases.delete(h);
   for (const [h, t] of priority) if (now - t > PRIORITY_MS) priority.delete(h);
 
@@ -191,6 +208,7 @@ async function claim() {
   });
 
   if (handle) leases.set(handle, now + LEASE_MS);
+  else lastClaimAt = prevClaimAt; // nothing to do: don't burn the slot
   return { handle };
 }
 
@@ -414,6 +432,107 @@ async function pushToCloud() {
   return result;
 }
 
+// ---------- seen-post history ----------
+// Separate IndexedDB database of posts the user actually had on screen, newest first,
+// capped at the historyLimit setting. Record: { id, handle, name, text, url, image,
+// location, seenAt (ms) }. id is the status id (or a synthetic one for posts without a
+// status link, e.g. ads).
+
+const HISTORY_DB = 'xlf-history';
+const HISTORY_STORE = 'posts';
+const HISTORY_DEFAULT_LIMIT = 100;
+const HISTORY_MAX_LIMIT = 10000;
+
+let historyDbPromise = null;
+function openHistoryDb() {
+  if (historyDbPromise) return historyDbPromise;
+  historyDbPromise = new Promise((resolve, reject) => {
+    const req = indexedDB.open(HISTORY_DB, 1);
+    req.onupgradeneeded = () => {
+      const store = req.result.createObjectStore(HISTORY_STORE, { keyPath: 'id' });
+      store.createIndex('seenAt', 'seenAt');
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => {
+      historyDbPromise = null;
+      reject(req.error);
+    };
+  });
+  return historyDbPromise;
+}
+
+async function withHistory(mode, fn) {
+  const db = await openHistoryDb();
+  const tx = db.transaction(HISTORY_STORE, mode);
+  const result = await fn(tx.objectStore(HISTORY_STORE));
+  await txDone(tx);
+  return result;
+}
+
+async function historyLimit() {
+  const { historyLimit: n } = await chrome.storage.sync.get({ historyLimit: HISTORY_DEFAULT_LIMIT });
+  return Math.min(HISTORY_MAX_LIMIT, Math.max(1, Math.floor(Number(n)) || HISTORY_DEFAULT_LIMIT));
+}
+
+const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+
+// Add (or bump to the top) posts seen on screen, then drop the oldest over the limit.
+async function addHistory(posts) {
+  const limit = await historyLimit();
+  const now = Date.now();
+  await withHistory('readwrite', async (store) => {
+    for (const p of posts) {
+      const id = str(p && p.id, 100);
+      if (!id) continue;
+      store.put({
+        id,
+        handle: validHandle(p.handle) || '',
+        name: str(p.name, 100),
+        text: str(p.text, 1000),
+        url: /^https:\/\/x\.com\//.test(p.url) ? p.url : '',
+        image: /^https:\/\/[a-z0-9.-]+\.twimg\.com\//.test(p.image) ? p.image : '',
+        location: cleanLocation(p.location),
+        seenAt: now,
+      });
+    }
+    let excess = (await reqToPromise(store.count())) - limit;
+    if (excess <= 0) return;
+    await new Promise((resolve, reject) => {
+      const req = store.index('seenAt').openCursor(); // oldest first
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur || excess-- <= 0) return resolve();
+        cur.delete();
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+// Newest first, at most historyLimit entries.
+async function listHistory() {
+  const limit = await historyLimit();
+  return withHistory('readonly', (store) => {
+    const out = [];
+    return new Promise((resolve, reject) => {
+      const req = store.index('seenAt').openCursor(null, 'prev');
+      req.onsuccess = () => {
+        const cur = req.result;
+        if (!cur || out.length >= limit) return resolve(out);
+        out.push(cur.value);
+        cur.continue();
+      };
+      req.onerror = () => reject(req.error);
+    });
+  });
+}
+
+async function clearHistory() {
+  await withHistory('readwrite', (store) => reqToPromise(store.clear()));
+  await chrome.storage.local.set({ historyClearedAt: Date.now() });
+}
+
 // Download the merged account list and import it (gaps only, like a file import).
 // Accepts a bare array or an ingest-style { accounts: [...] } body.
 async function pullFromCloud() {
@@ -464,6 +583,9 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     'queue-release': () => Promise.resolve(release(msg.handle)),
     'cloud-push': () => pushToCloud(),
     'cloud-pull': () => pullFromCloud(),
+    'history-add': () => addHistory(msg.posts || []).then(() => true),
+    'history-list': () => listHistory(),
+    'history-clear': () => clearHistory().then(() => true),
     'queue-stats': () => pendingCount().then((pending) => ({ pending, working: leases.size })),
   };
   const fn = msg && handlers[msg.type];

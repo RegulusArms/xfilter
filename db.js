@@ -1,7 +1,7 @@
 // Account database viewer/editor. Reads and writes through background.js.
 
 const PAGE_SIZE = 100;
-const DEFAULTS = { enabled: true, allowed: [], hideUnknown: true };
+const DEFAULTS = { enabled: true, allowed: [], hideUnknown: false, learningMode: true };
 
 const $ = (id) => document.getElementById(id);
 let rows = [];
@@ -23,7 +23,7 @@ const isWaiting = (rec) => rec.queueAt != null;
 // Same rule as content.js: shown if the location contains any allowed entry.
 function status(rec) {
   if (isWaiting(rec) && !rec.location) return 'waiting';
-  if (!settings.enabled || !settings.allowed.length) return 'off';
+  if (!settings.enabled || settings.learningMode || !settings.allowed.length) return 'off';
   if (!rec.location) return settings.hideUnknown ? 'hidden' : 'shown';
   const l = rec.location.toLowerCase();
   const ok = settings.allowed.some((a) => {
@@ -254,7 +254,7 @@ $('refresh').addEventListener('click', load);
 
 chrome.storage.onChanged.addListener((changes, area) => {
   // Filter settings changed in the popup → recompute the status column.
-  if (area === 'sync' && (changes.allowed || changes.enabled || changes.hideUnknown)) load();
+  if (area === 'sync' && (changes.allowed || changes.enabled || changes.hideUnknown || changes.learningMode)) load();
   // A lookup finished (or another tab edited an account): update that row in place.
   if (area === 'local' && changes.dbEdit && changes.dbEdit.newValue) {
     const { handle, record } = changes.dbEdit.newValue;

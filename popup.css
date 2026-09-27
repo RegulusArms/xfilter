@@ -36,6 +36,7 @@ section { border-top: 1px solid var(--border); padding-top: 10px; margin-top: 10
 
 .status { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
 .status.off { color: var(--danger); }
+.status.learning { color: var(--accent); }
 
 form { display: flex; gap: 6px; }
 input[type="text"] {
@@ -104,3 +105,38 @@ input[type="password"] {
   background: var(--chip); color: var(--fg); font: inherit;
 }
 button.danger { color: var(--danger); }
+
+/* tabs */
+.tabs { display: flex; gap: 4px; margin-top: 10px; border-bottom: 1px solid var(--border); }
+.tab {
+  flex: 1; background: transparent; color: var(--muted); border-radius: 0;
+  border-bottom: 2px solid transparent; padding: 6px 0; margin-bottom: -1px;
+}
+.tab.active { color: var(--fg); border-bottom-color: var(--accent); }
+.panel[hidden] { display: none; }
+
+/* history */
+.hist-bar { align-items: center; justify-content: space-between; margin-top: 10px; }
+.hist-limit { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.hist-limit input {
+  width: 72px; padding: 4px 6px; border: 1px solid var(--border); border-radius: 6px;
+  background: var(--chip); color: var(--fg); font: inherit;
+}
+ol.history { list-style: none; margin: 10px 0 0; padding: 0; max-height: 440px; overflow-y: auto; }
+ol.history li {
+  display: block; padding: 8px; margin-bottom: 6px; border-radius: 8px;
+  background: var(--chip); cursor: pointer;
+}
+ol.history li:hover { outline: 1px solid var(--accent); }
+ol.history li.empty { background: none; cursor: default; padding-left: 0; }
+ol.history li.empty:hover { outline: none; }
+.post-head { display: flex; gap: 4px; align-items: baseline; white-space: nowrap; overflow: hidden; }
+.post-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
+.post-meta { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.post-text {
+  margin-top: 2px; white-space: pre-wrap; word-break: break-word;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.post-text.none { color: var(--muted); font-style: italic; }
+.post-img { display: block; width: 100%; max-height: 120px; object-fit: cover; border-radius: 6px; margin-top: 6px; }
+.post-loc { margin-top: 4px; font-size: 11px; color: var(--muted); }

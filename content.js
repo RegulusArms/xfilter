@@ -21,9 +21,11 @@
   const DEFAULTS = {
     enabled: true,
     allowed: [],
-    blurPending: true,
-    hideUnknown: true,
-    showLabels: true,
+    blurPending: false,
+    hideUnknown: false,
+    showLabels: false,
+    learningMode: true,
+    slowMode: false,
     queryId: '',
   };
 
@@ -83,6 +85,7 @@
           }
           rescanAll();
         }
+        if (changes.historyClearedAt) historySent.clear(); // let posts on screen be recorded again
         if (changes.pausedUntil) {
           // Rate limit hit in another x.com tab: the limit is per account, so pause here too.
           pausedUntil = Math.max(pausedUntil, changes.pausedUntil.newValue || 0);
@@ -169,7 +172,10 @@
   function visiblePending() {
     const margin = window.innerHeight;
     const out = [];
-    document.querySelectorAll('[data-xlf="pending"][data-xlf-handle]').forEach((cell) => {
+    // By cache state, not data-xlf: in learning mode waiting posts aren't marked pending.
+    document.querySelectorAll('[data-xlf-handle]').forEach((cell) => {
+      const e = cache[cell.dataset.xlfHandle];
+      if (!e || !e.pending || e.loc) return;
       const r = cell.getBoundingClientRect();
       if (r.bottom > -margin && r.top < window.innerHeight + margin) out.push(cell.dataset.xlfHandle);
     });
@@ -206,9 +212,20 @@
     });
   }
 
-  // Returns 'show' | 'hide' | 'pending'
+  // Returns 'show' | 'hide' | 'pending'. Learning mode shows everything but still
+  // queues accounts for lookup (the background worker slows the lookups down).
   function decide(handle) {
-    if (!settings.enabled || !settings.allowed.length) return 'show';
+    if (!settings.enabled) return 'show';
+    if (settings.learningMode) {
+      filterState(handle);
+      return 'show';
+    }
+    if (!settings.allowed.length) return 'show';
+    return filterState(handle);
+  }
+
+  // The filter's verdict; also loads the account from the DB / queues it as needed.
+  function filterState(handle) {
     const e = cache[handle];
     if (!e) {
       checkDb(handle);
@@ -225,6 +242,7 @@
   function processArticle(article) {
     const handle = getHandle(article);
     if (!handle) return;
+    watchSeen(article);
     const cell = article.closest('[data-testid="cellInnerDiv"]') || article;
     const state = decide(handle);
     if (cell.dataset.xlf !== state) cell.dataset.xlf = state;
@@ -257,7 +275,7 @@
   }
 
   function rescanAll() {
-    if (!settings.enabled || !settings.allowed.length) {
+    if (!settings.enabled || settings.learningMode || !settings.allowed.length) {
       document.querySelectorAll('[data-xlf]').forEach((el) => (el.dataset.xlf = 'show'));
     }
     scan();
@@ -273,6 +291,86 @@
         scan();
       });
     }).observe(document.body, { childList: true, subtree: true });
+  }
+
+  // ---------- seen-post history ----------
+  // A post counts as seen once it has been on screen (half of it, or a good chunk of the
+  // viewport for tall posts) for SEEN_DWELL_MS. Hidden posts have no size, so they never
+  // count; blurred pending ones do. Details are read at that moment, because X reuses
+  // article elements for different posts as the timeline scrolls.
+
+  const SEEN_DWELL_MS = 500;
+  const SEEN_REPEAT_MS = 60e3; // re-seeing a post within this long doesn't re-send it
+  const watched = new WeakSet();
+  const dwellTimers = new WeakMap(); // article -> timeout id
+  const historySent = new Map(); // post id -> last time sent
+  const historyBatch = new Map(); // post id -> post
+  let historyTimer = null;
+
+  const seenObserver = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        const onScreen =
+          e.isIntersecting &&
+          (e.intersectionRatio >= 0.5 || e.intersectionRect.height >= window.innerHeight * 0.4);
+        clearTimeout(dwellTimers.get(e.target));
+        if (onScreen) dwellTimers.set(e.target, setTimeout(() => recordSeen(e.target), SEEN_DWELL_MS));
+      }
+    },
+    { threshold: [0, 0.25, 0.5, 0.75] }
+  );
+
+  function watchSeen(article) {
+    if (watched.has(article)) return;
+    watched.add(article);
+    seenObserver.observe(article);
+  }
+
+  // Small stable hash for posts without a status link (ads).
+  function hashText(s) {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return (h >>> 0).toString(36);
+  }
+
+  function readPost(article) {
+    const handle = getHandle(article);
+    if (!handle) return null;
+    const text = ((article.querySelector('[data-testid="tweetText"]') || {}).innerText || '').trim();
+    const timeLink = article.querySelector('a[href*="/status/"] time');
+    const m = timeLink && timeLink.closest('a').getAttribute('href').match(/^\/(\w{1,15})\/status\/(\d+)/);
+    const nameEl = article.querySelector('[data-testid="User-Name"] span');
+    const media = article.querySelector('[data-testid="tweetPhoto"] img, video[poster]');
+    return {
+      id: m ? m[2] : `nolink:${handle}:${hashText(text)}`,
+      url: m ? `https://x.com/${m[1]}/status/${m[2]}` : `https://x.com/${handle}`,
+      handle,
+      name: nameEl ? nameEl.textContent.trim() : '',
+      text,
+      image: media ? media.currentSrc || media.src || media.poster || '' : '',
+      location: (cache[handle] && cache[handle].loc) || null,
+    };
+  }
+
+  function recordSeen(article) {
+    if (!article.isConnected) return;
+    const post = readPost(article);
+    if (!post) return;
+    const now = Date.now();
+    if (now - (historySent.get(post.id) || 0) < SEEN_REPEAT_MS) return;
+    historySent.set(post.id, now);
+    if (historySent.size > 2000) {
+      for (const [id, t] of historySent) if (now - t >= SEEN_REPEAT_MS) historySent.delete(id);
+    }
+    historyBatch.set(post.id, post);
+    if (!historyTimer) historyTimer = setTimeout(flushHistory, 1000);
+  }
+
+  function flushHistory() {
+    historyTimer = null;
+    const posts = [...historyBatch.values()];
+    historyBatch.clear();
+    if (posts.length) sendMsg({ type: 'history-add', posts }).catch(() => {});
   }
 
   function getStats() {
@@ -326,6 +424,7 @@
           pausedUntil = Math.max(pausedUntil, claim.pausedUntil);
           continue;
         }
+        if (claim.nextAt) return pumpLater(claim.nextAt - Date.now() + 20); // lookup pace (background.js)
         if (!claim.handle) return pumpLater(IDLE_POLL_MS);
         active++;
         run(claim.handle);

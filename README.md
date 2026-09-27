@@ -4,6 +4,8 @@ A Brave (Chromium) extension that hides posts on x.com from accounts whose **"Ac
 
 It changes only what your browser shows. Nothing is posted, followed, blocked or changed on X.
 
+It also keeps a [history of the posts you've seen](#post-history), so you can find that post you were reading before your timeline refreshed.
+
 ---
 
 ## Install in Brave
@@ -47,6 +49,8 @@ Your settings and account database are kept across updates and reloads.
 
 Click the toolbar icon to open the popup.
 
+On a fresh install the extension starts in **learning mode**: every post is shown while it slowly builds up the account database. All other options start unticked, and the on/off switch starts on (learning mode needs it on to run lookups). Add some allowed locations and untick **Learning mode** when you're ready to filter.
+
 | Control | What it does |
 |---|---|
 | **On/off switch** | Turns filtering on or off. When off, every post is shown. |
@@ -54,8 +58,11 @@ Click the toolbar icon to open the popup.
 | **Hide accounts with no location** | Hide authors X shows no location for. |
 | **Blur posts while checking** | Blur posts until their author's location is known, instead of showing them. |
 | **Show location label on posts** | Adds a small 📍 label with the location to posts that are shown. |
+| **Slow mode** | Filters as usual, but slows location lookups to one every 10 seconds. See [Slow mode](#slow-mode). |
+| **Learning mode** | Shows every post (the filter is bypassed) and slows location lookups to one every 10 seconds. See [Learning mode](#learning-mode). |
 | **This tab** | Live counts for the current x.com tab: hidden, shown, being checked, lookups running now, lookups made this page. Also shows whether the login token was captured and the last error. |
 | **Account database** | Number of saved accounts and how many are waiting for a lookup, plus **Open**, **Export**, **Import** and **Clear**. |
+| **History tab** | The posts you've recently had on screen, newest first. See [Post history](#post-history). |
 | **Advanced → AboutAccountQuery ID override** | Manual override for X's lookup request ID. See [Finding the query ID](#finding-the-query-id-for-the-override). |
 
 Because matching is by "contains", a short entry like `United` matches both United States and United Kingdom.
@@ -79,7 +86,7 @@ Unknown accounts are saved as **waiting for lookup**. The extension then asks X 
 
 - The login token and request ID are picked up automatically from X's own traffic. No setup is needed.
 - Accounts whose posts are **on screen** are looked up first, then the rest oldest first.
-- Each x.com tab runs up to 2 lookups at a time. Tabs share one waiting list and never look up the same account twice.
+- Lookups start at most **once a second**, counted across all x.com tabs together ([slow mode](#slow-mode) and [learning mode](#learning-mode) go slower). Tabs share one waiting list and never look up the same account twice.
 - The waiting list survives refreshes and restarts. It keeps draining as long as **any x.com tab is open**.
 
 ### 4. Rate limits
@@ -94,6 +101,26 @@ X allows only a limited number of these lookups per 15-minute window.
 
 ### 5. Hiding
 Hidden posts are collapsed in your browser only. Turning the filter off or changing the allow list brings them back instantly.
+
+### Slow mode
+Tick **Slow mode** in the popup's Options to go easier on X's rate limit.
+
+- Filtering works exactly as normal: posts are hidden, shown or blurred by your allow list.
+- Location lookups are limited to **one every 10 seconds**, counted across all x.com tabs together. On-screen accounts are still looked up first.
+- Posts from accounts still waiting stay blurred (or shown, if blurring is off) for longer, since lookups take longer to reach them.
+- Untick it to go back to the normal pace of one lookup a second.
+
+Slow mode and learning mode are separate settings. If both are ticked, learning mode applies (no filtering).
+
+### Learning mode
+Tick **Learning mode** in the popup's Options to build up the account database slowly in the background while you browse normally.
+
+- **Nothing is filtered:** every post is shown and nothing is blurred, whatever your allow list says. Location labels still appear if **Show location label on posts** is on.
+- **Lookups keep running, but slowly:** at most **one location lookup every 10 seconds**, counted across all x.com tabs together. Accounts you scroll past are still added to the waiting list, and ones currently on screen are looked up first.
+- The popup status line shows when learning mode is on, and the database page's status column shows **off** for every account that isn't waiting for a lookup.
+- Untick it to go back to normal: filtering resumes immediately and lookups go back to the normal pace of one a second.
+
+The master on/off switch still wins: with the filter switched off, no lookups run in either mode.
 
 ---
 
@@ -157,6 +184,20 @@ The button then shows how many accounts were added and how many were filled in. 
 
 ---
 
+## Post history
+
+The **History** tab in the popup lists the posts you've recently had on screen, newest first, so you can find a post again after X refreshes your timeline.
+
+- A post counts as seen once at least half of it has been on screen for about half a second. Posts the filter hid are never recorded; blurred ones waiting for a lookup are.
+- Each entry shows the author, when you saw it, the post text, the first image and the author's location if known. Click an entry to open the post on x.com.
+- Seeing a post again moves it back to the top.
+- **Keep last** sets how many posts are kept: 100 by default, up to 10,000. Older ones are dropped.
+- **Clear** deletes the whole history. The account database is not affected.
+
+History is kept in its own IndexedDB database (`xlf-history`), separate from the account database, and never leaves your browser.
+
+---
+
 ## Finding the query ID (for the override)
 
 X gives each internal request an ID that changes from time to time. The extension finds the current one automatically in three ways:
@@ -206,7 +247,7 @@ Errors are also logged in the x.com tab's DevTools console, prefixed with `[X Lo
 | `manifest.json` | Extension manifest (Manifest V3). |
 | `content.js` / `content.css` | Runs on x.com: finds posts, hides or blurs them, runs lookups. |
 | `page-hook.js` | Runs inside the x.com page to read X's login token and query ID from its own requests (read-only). |
-| `background.js` | Account database (IndexedDB) and the shared lookup queue. |
+| `background.js` | Account database and post history (IndexedDB), and the shared lookup queue. |
 | `popup.html` / `popup.js` / `popup.css` | Toolbar popup. |
 | `db.html` / `db.js` / `db.css` | Account database viewer and editor. |
 | `icons/` | Extension icons. |
