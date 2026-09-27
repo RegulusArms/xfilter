@@ -24,6 +24,7 @@ const TTL_NONE = 7 * 24 * 3600e3; // re-check "no location" accounts after this 
 const LEASE_MS = 60e3; // a claimed account is reserved for one tab this long
 const PRIORITY_MS = 30e3; // "on screen" hints expire after this long
 const MERGED_URL = 'https://merged.regulusarms.com/merged.json'; // "Pull from cloud" source
+const CLOUD_COOLDOWN_MS = 24 * 3600e3; // at most one successful push and one pull per day
 
 let dbPromise = null;
 function openDb() {
@@ -364,7 +365,19 @@ function iso(ms) {
 
 // POST every account with a known location to the Azure Logic App. Pending accounts
 // and accounts with no location are left out.
+// Throws if the last successful push/pull was less than CLOUD_COOLDOWN_MS ago.
+async function checkCooldown(key, label) {
+  const { [key]: last } = await chrome.storage.local.get(key);
+  if (!last || last.ok === false) return;
+  const next = last.at + CLOUD_COOLDOWN_MS;
+  if (Date.now() < next) {
+    const when = new Date(next).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
+    throw new Error(`${label} allowed once per 24 h — next after ${when}`);
+  }
+}
+
 async function pushToCloud() {
+  await checkCooldown('lastPush', 'Push');
   const { ingestUrl: override = '' } = await chrome.storage.local.get('ingestUrl');
   const url = (override || (self.XLF_CONFIG && self.XLF_CONFIG.ingestUrl) || '').trim();
   if (!url) throw new Error('No ingest URL set (popup → Advanced, or config.js)');
@@ -404,6 +417,7 @@ async function pushToCloud() {
 // Download the merged account list and import it (gaps only, like a file import).
 // Accepts a bare array or an ingest-style { accounts: [...] } body.
 async function pullFromCloud() {
+  await checkCooldown('lastPull', 'Pull');
   const res = await fetch(MERGED_URL, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = await res.json();

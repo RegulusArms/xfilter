@@ -151,8 +151,21 @@ $('ingestUrl').addEventListener('change', (e) =>
   chrome.storage.local.set({ ingestUrl: e.target.value.trim() })
 );
 
+const CLOUD_COOLDOWN_MS = 24 * 3600e3; // keep in sync with background.js
+
+// Disables the button until the 24 h cooldown after the last successful run is over.
+function applyCooldown(id, last) {
+  const next = last && last.ok !== false ? last.at + CLOUD_COOLDOWN_MS : 0;
+  const waiting = Date.now() < next;
+  $(id).disabled = waiting;
+  $(id).title = waiting
+    ? 'Available again ' + new Date(next).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
+    : '';
+}
+
 async function showLastPush() {
   const { lastPush } = await chrome.storage.local.get('lastPush');
+  applyCooldown('pushDb', lastPush);
   if (!lastPush) return;
   const when = new Date(lastPush.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
   $('pushStatus').textContent = lastPush.ok
@@ -168,13 +181,13 @@ $('pushDb').addEventListener('click', async () => {
     await showLastPush();
   } catch (e) {
     $('pushStatus').textContent = 'Push failed: ' + e.message;
-  } finally {
-    $('pushDb').disabled = false;
+    applyCooldown('pushDb', (await chrome.storage.local.get('lastPush')).lastPush);
   }
 });
 
 async function showLastPull() {
   const { lastPull } = await chrome.storage.local.get('lastPull');
+  applyCooldown('pullDb', lastPull);
   if (!lastPull) return;
   const when = new Date(lastPull.at).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
   $('pullStatus').textContent =
@@ -190,8 +203,7 @@ $('pullDb').addEventListener('click', async () => {
     refreshDbCount();
   } catch (e) {
     $('pullStatus').textContent = 'Pull failed: ' + e.message;
-  } finally {
-    $('pullDb').disabled = false;
+    applyCooldown('pullDb', (await chrome.storage.local.get('lastPull')).lastPull);
   }
 });
 
