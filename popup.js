@@ -1,10 +1,11 @@
 const DEFAULTS = {
   enabled: true,
   allowed: [],
-  blurPending: true,
-  hideUnknown: true,
-  showLabels: true,
-  learningMode: false,
+  blurPending: false,
+  hideUnknown: false,
+  showLabels: false,
+  learningMode: true,
+  slowMode: false,
   queryId: '',
 };
 
@@ -18,6 +19,7 @@ async function load() {
   $('blurPending').checked = settings.blurPending;
   $('showLabels').checked = settings.showLabels;
   $('learningMode').checked = settings.learningMode;
+  $('slowMode').checked = settings.slowMode;
   $('queryId').value = settings.queryId;
   renderList();
   renderStatus();
@@ -35,13 +37,14 @@ function renderStatus() {
     el.textContent = 'Filter is OFF — all posts are shown.';
     el.className = 'status off';
   } else if (settings.learningMode) {
-    el.textContent = 'Learning mode — all posts are shown; 1 location lookup every 30 s.';
+    el.textContent = 'Learning mode — all posts are shown; 1 location lookup every 10 s.';
     el.className = 'status learning';
   } else if (!settings.allowed.length) {
     el.textContent = 'Filter is on, but no locations are allowed yet — add one below.';
     el.className = 'status';
   } else {
     el.textContent = `Filter is ON — showing posts from ${settings.allowed.length} location(s).`;
+    if (settings.slowMode) el.textContent += ' Slow mode: 1 lookup every 10 s.';
     el.className = 'status';
   }
 }
@@ -85,7 +88,7 @@ $('addForm').addEventListener('submit', (e) => {
   $('newLoc').focus();
 });
 
-for (const id of ['enabled', 'hideUnknown', 'blurPending', 'showLabels', 'learningMode']) {
+for (const id of ['enabled', 'hideUnknown', 'blurPending', 'showLabels', 'learningMode', 'slowMode']) {
   $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
 }
 

@@ -1,7 +1,7 @@
 // Account database viewer/editor. Reads and writes through background.js.
 
 const PAGE_SIZE = 100;
-const DEFAULTS = { enabled: true, allowed: [], hideUnknown: true, learningMode: false };
+const DEFAULTS = { enabled: true, allowed: [], hideUnknown: false, learningMode: true };
 
 const $ = (id) => document.getElementById(id);
 let rows = [];

@@ -21,10 +21,11 @@
   const DEFAULTS = {
     enabled: true,
     allowed: [],
-    blurPending: true,
-    hideUnknown: true,
-    showLabels: true,
-    learningMode: false,
+    blurPending: false,
+    hideUnknown: false,
+    showLabels: false,
+    learningMode: true,
+    slowMode: false,
     queryId: '',
   };
 
@@ -423,7 +424,7 @@
           pausedUntil = Math.max(pausedUntil, claim.pausedUntil);
           continue;
         }
-        if (claim.nextAt) return pumpLater(claim.nextAt - Date.now() + 250); // learning-mode pace
+        if (claim.nextAt) return pumpLater(claim.nextAt - Date.now() + 20); // lookup pace (background.js)
         if (!claim.handle) return pumpLater(IDLE_POLL_MS);
         active++;
         run(claim.handle);

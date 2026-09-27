@@ -23,7 +23,11 @@ const STORE = 'accounts';
 const TTL_NONE = 7 * 24 * 3600e3; // re-check "no location" accounts after this long
 const LEASE_MS = 60e3; // a claimed account is reserved for one tab this long
 const PRIORITY_MS = 30e3; // "on screen" hints expire after this long
-const LEARNING_INTERVAL_MS = 30e3; // learning mode: at most one lookup this often, across all tabs
+// Lookup pace: at most one lookup started this often, across all tabs. Learning wins if
+// both it and slow mode are on; otherwise the normal pace applies.
+const NORMAL_INTERVAL_MS = 1e3;
+const LEARNING_INTERVAL_MS = 10e3;
+const SLOW_INTERVAL_MS = 10e3;
 const MERGED_URL = 'https://merged.regulusarms.com/merged.json'; // "Pull from cloud" source
 const CLOUD_COOLDOWN_MS = 24 * 3600e3; // at most one successful push and one pull per day
 
@@ -128,7 +132,7 @@ function pendingCount() {
 
 const leases = new Map(); // handle -> lease expiry
 const priority = new Map(); // handle -> last time a tab reported it on screen
-let lastClaimAt = 0; // for the learning-mode pace
+let lastClaimAt = 0; // for the lookup pace
 
 // Content script saw these accounts on the page. New ones become pending; "no location"
 // ones older than TTL_NONE are queued for a re-check. `visible` ones jump the line.
@@ -164,21 +168,21 @@ function setPriority(handles) {
 // Hand the next account to look up to a tab: on-screen accounts first (most recently
 // reported), then the oldest pending one. Returns { handle } or { handle: null }.
 async function claim() {
-  const [{ pausedUntil = 0 }, { learningMode = false }] = await Promise.all([
+  const [{ pausedUntil = 0 }, { learningMode, slowMode }] = await Promise.all([
     chrome.storage.local.get('pausedUntil'),
-    chrome.storage.sync.get('learningMode'),
+    // Defaults must match popup.js / content.js: learning mode is on for a fresh install.
+    chrome.storage.sync.get({ learningMode: true, slowMode: false }),
   ]);
   if (pausedUntil > Date.now()) return { handle: null, pausedUntil };
 
   const now = Date.now();
-  // Learning mode: one lookup per LEARNING_INTERVAL_MS. The slot is reserved before the
-  // DB read so concurrent claims from several tabs can't both get through.
+  // One lookup per interval. The slot is reserved before the DB read so concurrent
+  // claims from several tabs can't both get through.
+  const interval = learningMode ? LEARNING_INTERVAL_MS : slowMode ? SLOW_INTERVAL_MS : NORMAL_INTERVAL_MS;
   const prevClaimAt = lastClaimAt;
-  if (learningMode) {
-    const nextAt = lastClaimAt + LEARNING_INTERVAL_MS;
-    if (now < nextAt) return { handle: null, nextAt };
-    lastClaimAt = now;
-  }
+  const nextAt = lastClaimAt + interval;
+  if (now < nextAt) return { handle: null, nextAt };
+  lastClaimAt = now;
   for (const [h, exp] of leases) if (exp < now) leases.delete(h);
   for (const [h, t] of priority) if (now - t > PRIORITY_MS) priority.delete(h);
 
@@ -204,7 +208,7 @@ async function claim() {
   });
 
   if (handle) leases.set(handle, now + LEASE_MS);
-  else if (learningMode) lastClaimAt = prevClaimAt; // nothing to do: don't burn the slot
+  else lastClaimAt = prevClaimAt; // nothing to do: don't burn the slot
   return { handle };
 }
 
