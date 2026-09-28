@@ -18,8 +18,8 @@ const LEASE_MS = 60e3; // a claimed account is reserved for one tab this long
 const PRIORITY_MS = 30e3; // "on screen" hints expire after this long
 // Lookup pace: at most one lookup started this often, across all tabs. Learning wins if
 // both it and slow mode are on; otherwise the normal pace applies.
-const NORMAL_INTERVAL_MS = 1e3;
-const LEARNING_INTERVAL_MS = 10e3;
+const NORMAL_INTERVAL_MS = 5e3;
+const LEARNING_INTERVAL_MS = 15e3;
 const SLOW_INTERVAL_MS = 10e3;
 
 let dbPromise = null;
