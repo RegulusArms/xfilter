@@ -1,2 +1,0 @@
-# Local secrets — contains the Logic App trigger URL (its sig= parameter is a password)
-config.js

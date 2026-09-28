@@ -11,13 +11,6 @@
 //                     eligible; later than now after failures),
 //           attempts?, lastError? }
 
-// Optional local config (git-ignored; see config.example.js) — provides the ingest URL.
-try {
-  importScripts('config.js');
-} catch {
-  /* no config.js — the URL can be set in the popup instead */
-}
-
 const DB_NAME = 'xlf';
 const STORE = 'accounts';
 const TTL_NONE = 7 * 24 * 3600e3; // re-check "no location" accounts after this long
@@ -25,11 +18,9 @@ const LEASE_MS = 60e3; // a claimed account is reserved for one tab this long
 const PRIORITY_MS = 30e3; // "on screen" hints expire after this long
 // Lookup pace: at most one lookup started this often, across all tabs. Learning wins if
 // both it and slow mode are on; otherwise the normal pace applies.
-const NORMAL_INTERVAL_MS = 1e3;
-const LEARNING_INTERVAL_MS = 10e3;
+const NORMAL_INTERVAL_MS = 5e3;
+const LEARNING_INTERVAL_MS = 15e3;
 const SLOW_INTERVAL_MS = 10e3;
-const MERGED_URL = 'https://merged.regulusarms.com/merged.json'; // "Pull from cloud" source
-const CLOUD_COOLDOWN_MS = 24 * 3600e3; // at most one successful push and one pull per day
 
 let dbPromise = null;
 function openDb() {
@@ -250,7 +241,7 @@ function release(handle) {
 
 // ---------- edits (DB page / import) ----------
 
-// Accepts ms numbers (our export) or ISO strings (cloud / merged.json). 0 if unusable.
+// Accepts ms numbers (our export) or ISO strings. 0 if unusable.
 function toMs(v) {
   if (typeof v === 'number') return v > 0 ? v : 0;
   const t = Date.parse(v);
@@ -365,73 +356,6 @@ async function clearAll() {
   priority.clear();
 }
 
-// ---------- cloud push ----------
-
-// Random per-install id so the ingest side can group uploads by browser profile.
-async function getClientId() {
-  let { clientId } = await chrome.storage.local.get('clientId');
-  if (!clientId) {
-    clientId = crypto.randomUUID();
-    await chrome.storage.local.set({ clientId });
-  }
-  return clientId;
-}
-
-function iso(ms) {
-  return ms ? new Date(ms).toISOString() : null;
-}
-
-// POST every account with a known location to the Azure Logic App. Pending accounts
-// and accounts with no location are left out.
-// Throws if the last successful push/pull was less than CLOUD_COOLDOWN_MS ago.
-async function checkCooldown(key, label) {
-  const { [key]: last } = await chrome.storage.local.get(key);
-  if (!last || last.ok === false) return;
-  const next = last.at + CLOUD_COOLDOWN_MS;
-  if (Date.now() < next) {
-    const when = new Date(next).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' });
-    throw new Error(`${label} allowed once per 24 h — next after ${when}`);
-  }
-}
-
-async function pushToCloud() {
-  await checkCooldown('lastPush', 'Push');
-  const { ingestUrl: override = '' } = await chrome.storage.local.get('ingestUrl');
-  const url = (override || (self.XLF_CONFIG && self.XLF_CONFIG.ingestUrl) || '').trim();
-  if (!url) throw new Error('No ingest URL set (popup → Advanced, or config.js)');
-
-  const accounts = (await getAll())
-    .filter((r) => r.queueAt == null && r.checkedAt && r.location)
-    .map((r) => ({
-      handle: r.handle,
-      location: r.location,
-      checkedAt: iso(r.checkedAt),
-      firstSeen: iso(r.firstSeen),
-      manual: !!r.manual,
-      comment: r.comment || '',
-    }));
-
-  const body = {
-    schemaVersion: 1,
-    clientId: await getClientId(),
-    extensionVersion: chrome.runtime.getManifest().version,
-    sentAt: new Date().toISOString(),
-    accountCount: accounts.length,
-    accounts,
-  };
-
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const result = { at: Date.now(), ok: res.ok, status: res.status, count: accounts.length };
-  if (!res.ok) result.error = (await res.text().catch(() => '')).slice(0, 300);
-  await chrome.storage.local.set({ lastPush: result });
-  if (!res.ok) throw new Error(`HTTP ${res.status}${result.error ? ': ' + result.error : ''}`);
-  return result;
-}
-
 // ---------- seen-post history ----------
 // Separate IndexedDB database of posts the user actually had on screen, newest first,
 // capped at the historyLimit setting. Record: { id, handle, name, text, url, image,
@@ -533,21 +457,6 @@ async function clearHistory() {
   await chrome.storage.local.set({ historyClearedAt: Date.now() });
 }
 
-// Download the merged account list and import it (gaps only, like a file import).
-// Accepts a bare array or an ingest-style { accounts: [...] } body.
-async function pullFromCloud() {
-  await checkCooldown('lastPull', 'Pull');
-  const res = await fetch(MERGED_URL, { cache: 'no-store' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
-  const records = Array.isArray(data) ? data : Array.isArray(data && data.accounts) ? data.accounts : null;
-  if (!records) throw new Error('Unexpected file format');
-  const stats = await putMany(records);
-  const result = { at: Date.now(), total: records.length, ...stats };
-  await chrome.storage.local.set({ lastPull: result });
-  return result;
-}
-
 // One-time move of the old chrome.storage cache (v1.0) into the database.
 async function migrateOldCache() {
   const { locCache } = await chrome.storage.local.get('locCache');
@@ -581,8 +490,6 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
     'queue-complete': () => complete(msg.handle, msg.location),
     'queue-fail': () => fail(msg.handle, msg.error).then(() => true),
     'queue-release': () => Promise.resolve(release(msg.handle)),
-    'cloud-push': () => pushToCloud(),
-    'cloud-pull': () => pullFromCloud(),
     'history-add': () => addHistory(msg.posts || []).then(() => true),
     'history-list': () => listHistory(),
     'history-clear': () => clearHistory().then(() => true),

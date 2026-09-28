@@ -56,23 +56,12 @@
       <button id="clearDb" class="secondary danger">Clear</button>
       <input id="importFile" type="file" accept=".json,application/json" hidden>
     </div>
-    <div class="row push">
-      <button id="pushDb">Push to cloud</button>
-      <span id="pushStatus" class="muted"></span>
-    </div>
-    <div class="row push">
-      <button id="pullDb" class="secondary">Pull from cloud</button>
-      <span id="pullStatus" class="muted"></span>
-    </div>
   </section>
 
   <details>
     <summary>Advanced</summary>
     <label class="field">AboutAccountQuery ID override
       <input id="queryId" type="text" placeholder="auto-detect" autocomplete="off">
-    </label>
-    <label class="field">Cloud ingest URL override
-      <input id="ingestUrl" type="password" placeholder="uses config.js" autocomplete="off">
     </label>
   </details>
   </div>
