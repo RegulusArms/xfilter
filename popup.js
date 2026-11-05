@@ -6,6 +6,7 @@ const DEFAULTS = {
   showLabels: false,
   learningMode: true,
   slowMode: false,
+  greentext: false,
   queryId: '',
 };
 
@@ -20,6 +21,7 @@ async function load() {
   $('showLabels').checked = settings.showLabels;
   $('learningMode').checked = settings.learningMode;
   $('slowMode').checked = settings.slowMode;
+  $('greentext').checked = settings.greentext;
   $('queryId').value = settings.queryId;
   renderList();
   renderStatus();
@@ -88,7 +90,7 @@ $('addForm').addEventListener('submit', (e) => {
   $('newLoc').focus();
 });
 
-for (const id of ['enabled', 'hideUnknown', 'blurPending', 'showLabels', 'learningMode', 'slowMode']) {
+for (const id of ['enabled', 'hideUnknown', 'blurPending', 'showLabels', 'learningMode', 'slowMode', 'greentext']) {
   $(id).addEventListener('change', (e) => save({ [id]: e.target.checked }));
 }
 

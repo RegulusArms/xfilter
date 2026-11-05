@@ -26,6 +26,7 @@
     showLabels: false,
     learningMode: true,
     slowMode: false,
+    greentext: false,
     queryId: '',
   };
 
@@ -271,7 +272,67 @@
 
   function scan() {
     document.querySelectorAll('article[data-testid="tweet"]').forEach(processArticle);
+    updateGreentext();
     reportPriority();
+  }
+
+  // ---------- greentext ----------
+  // Lines of post text starting with ">" are colored green. Uses the CSS Custom
+  // Highlight API (see content.css) so X's React-managed DOM is never modified.
+
+  const greenHighlight = typeof Highlight === 'function' && CSS.highlights ? new Highlight() : null;
+  if (greenHighlight) CSS.highlights.set('xlf-greentext', greenHighlight);
+
+  function updateGreentext() {
+    if (!greenHighlight) return;
+    greenHighlight.clear();
+    if (!settings.greentext) return;
+    document.querySelectorAll('[data-testid="tweetText"]').forEach((el) => {
+      for (const r of greentextRanges(el)) greenHighlight.add(r);
+    });
+  }
+
+  // Walks the text nodes (and <br>s) of a post, tracking line starts.
+  function greentextRanges(root) {
+    const ranges = [];
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+    let atLineStart = true;
+    let range = null; // open range for the current green line
+    let last = null; // last text node + offset seen, to close a range at end of post
+    const close = (node, offset) => {
+      if (!range) return;
+      range.setEnd(node, offset);
+      ranges.push(range);
+      range = null;
+    };
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (n.nodeType === Node.ELEMENT_NODE) {
+        if (n.tagName === 'BR') {
+          if (last) close(last.node, last.offset);
+          atLineStart = true;
+        } else if (n.tagName === 'IMG') {
+          atLineStart = false; // emoji
+        }
+        continue;
+      }
+      const t = n.data;
+      for (let i = 0; i < t.length; i++) {
+        const c = t[i];
+        if (c === '\n') {
+          close(n, i);
+          atLineStart = true;
+        } else if (atLineStart) {
+          atLineStart = false;
+          if (c === '>') {
+            range = document.createRange();
+            range.setStart(n, i);
+          }
+        }
+      }
+      last = { node: n, offset: t.length };
+    }
+    if (last) close(last.node, last.offset);
+    return ranges;
   }
 
   function rescanAll() {
