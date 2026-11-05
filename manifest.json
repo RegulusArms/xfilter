@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "X Location Filter",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "Hides posts on x.com from accounts whose 'Account based in' location isn't on your allow list. Display-only; changes nothing on X.",
   "permissions": ["storage"],
   "host_permissions": ["https://x.com/*", "https://abs.twimg.com/*"],

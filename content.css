@@ -24,3 +24,8 @@
   white-space: nowrap;
   font-family: inherit;
 }
+
+/* "Greentext" option: post lines starting with ">" (set in content.js). */
+::highlight(xlf-greentext) {
+  color: #789922;
+}
